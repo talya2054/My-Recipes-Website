@@ -59,5 +59,11 @@ Fill these values in `sync-config.js`:
 - `geminiApiKey`
 - Optional: `geminiModel` (default: `gemini-1.5-flash`)
 
+If you do not want secrets in files tracked by GitHub:
+- Keep `sync-config.js` empty.
+- Open `Add Recipe` page.
+- Paste Gemini key in the `Gemini API key` field and click `Save Key Locally`.
+- The key is saved only in browser `localStorage` (`recipe_runtime_config`).
+
 Firestore collection used:
 - `recipes`

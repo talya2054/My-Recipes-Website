@@ -138,12 +138,18 @@ function initAddRecipe() {
   const previewBox = document.querySelector("#saveStatus");
   const ingredientsEditor = document.querySelector("#ingredientsEditor");
   const stepsEditor = document.querySelector("#stepsEditor");
+  const geminiKeyInput = document.querySelector("#geminiKeyInput");
+  const saveGeminiKeyBtn = document.querySelector("#saveGeminiKeyBtn");
   const analyzeBtn = document.querySelector("#analyzeBtn");
   const previewBtn = document.querySelector("#previewBtn");
   const saveBtn = document.querySelector("#saveBtn");
   const fetchBtn = document.querySelector("#fetchUrlBtn");
 
   category.innerHTML = CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join("");
+  const activeCfg = getSyncConfig();
+  if (activeCfg.geminiApiKey) {
+    geminiKeyInput.value = activeCfg.geminiApiKey;
+  }
   if (editingRecipe) {
     titleInput.value = editingRecipe.title;
     category.value = editingRecipe.category;
@@ -155,6 +161,18 @@ function initAddRecipe() {
     saveBtn.textContent = "Update in Cloud";
   }
 
+  saveGeminiKeyBtn.addEventListener("click", () => {
+    const key = geminiKeyInput.value.trim();
+    if (!key) {
+      previewBox.textContent = "Please enter a Gemini API key first.";
+      return;
+    }
+    const runtime = readRuntimeConfig();
+    runtime.geminiApiKey = key;
+    writeRuntimeConfig(runtime);
+    previewBox.textContent = "Gemini key saved locally on this device.";
+  });
+
   analyzeBtn.addEventListener("click", async () => {
     if (analyzeInFlight) {
       previewBox.textContent = "AI request already in progress. Please wait.";
@@ -163,11 +181,6 @@ function initAddRecipe() {
     const raw = source.value.trim();
     if (!raw) {
       previewBox.textContent = "Please paste a recipe first.";
-      return;
-    }
-    if (location.protocol === "file:") {
-      previewBox.textContent =
-        "AI analysis is blocked in file:// mode. Open the deployed HTTPS site (GitHub Pages/Firebase Hosting) and try again.";
       return;
     }
     previewBox.textContent = "Analyzing with AI...";
@@ -181,7 +194,11 @@ function initAddRecipe() {
       stepsEditor.value = (aiRecipe.steps || []).map(convertFahrenheitTextToCelsius).join("\n");
       previewBox.textContent = "AI analysis complete. You can edit anything before saving.";
     } catch (error) {
-      previewBox.textContent = `AI analysis failed: ${error.message}. You can use Fallback Parse and edit manually.`;
+      const parsed = parseRecipe(source.value, category.value, titleInput.value.trim());
+      if (!titleInput.value.trim()) titleInput.value = parsed.title;
+      if (!ingredientsEditor.value.trim()) ingredientsEditor.value = parsed.ingredients.map((x) => x.original).join("\n");
+      if (!stepsEditor.value.trim()) stepsEditor.value = parsed.steps.map(convertFahrenheitTextToCelsius).join("\n");
+      previewBox.textContent = `AI analysis failed: ${error.message}. Fallback Parse was applied automatically.`;
     } finally {
       analyzeInFlight = false;
       analyzeBtn.disabled = false;
@@ -779,9 +796,6 @@ function buildRecipeFromEditors({ title, category, ingredientsText, stepsText, s
 }
 
 async function analyzeRecipeWithGemini(rawText) {
-  if (location.protocol === "file:") {
-    throw new Error("Gemini calls are blocked from file:// origin");
-  }
   const cfg = getSyncConfig();
   if (!cfg.geminiApiKey) {
     throw new Error("Missing Gemini API key");
@@ -955,7 +969,23 @@ function guessTitleFromText(text) {
 
 function getSyncConfig() {
   const raw = window.RECIPE_SYNC || {};
-  return { ...DEFAULT_SYNC_CONFIG, ...raw };
+  const runtime = readRuntimeConfig();
+  return { ...DEFAULT_SYNC_CONFIG, ...raw, ...runtime };
+}
+
+function readRuntimeConfig() {
+  try {
+    const raw = localStorage.getItem("recipe_runtime_config");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeRuntimeConfig(value) {
+  localStorage.setItem("recipe_runtime_config", JSON.stringify(value || {}));
 }
 
 function isSyncEnabled() {
