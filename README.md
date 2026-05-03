@@ -53,17 +53,14 @@ The Add Recipe page now supports:
 - Editable English fields: name, category, ingredients, instructions.
 - `Save to Cloud` to Firestore.
 
-Fill these values in `sync-config.js`:
+Configure on Vercel:
+1. Add environment variable `GEMINI_API_KEY`.
+2. Redeploy.
+3. The frontend calls `/api/analyze-recipe` and does not expose Gemini key in browser code.
+
+For Firestore client save, fill in `sync-config.js`:
 - `firebaseProjectId`
 - `firebaseApiKey`
-- `geminiApiKey`
-- Optional: `geminiModel` (default: `gemini-1.5-flash`)
-
-If you do not want secrets in files tracked by GitHub:
-- Keep `sync-config.js` empty.
-- Open `Add Recipe` page.
-- Paste Gemini key in the `Gemini API key` field and click `Save Key Locally`.
-- The key is saved only in browser `localStorage` (`recipe_runtime_config`).
 
 Firestore collection used:
 - `recipes`

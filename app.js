@@ -138,8 +138,6 @@ function initAddRecipe() {
   const previewBox = document.querySelector("#saveStatus");
   const ingredientsEditor = document.querySelector("#ingredientsEditor");
   const stepsEditor = document.querySelector("#stepsEditor");
-  const geminiKeyInput = document.querySelector("#geminiKeyInput");
-  const saveGeminiKeyBtn = document.querySelector("#saveGeminiKeyBtn");
   const analyzeBtn = document.querySelector("#analyzeBtn");
   const previewBtn = document.querySelector("#previewBtn");
   const saveBtn = document.querySelector("#saveBtn");
@@ -147,9 +145,6 @@ function initAddRecipe() {
 
   category.innerHTML = CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join("");
   const activeCfg = getSyncConfig();
-  if (activeCfg.geminiApiKey) {
-    geminiKeyInput.value = activeCfg.geminiApiKey;
-  }
   if (editingRecipe) {
     titleInput.value = editingRecipe.title;
     category.value = editingRecipe.category;
@@ -160,18 +155,6 @@ function initAddRecipe() {
     previewBox.textContent = "Editing mode: update fields and save.";
     saveBtn.textContent = "Update in Cloud";
   }
-
-  saveGeminiKeyBtn.addEventListener("click", () => {
-    const key = geminiKeyInput.value.trim();
-    if (!key) {
-      previewBox.textContent = "Please enter a Gemini API key first.";
-      return;
-    }
-    const runtime = readRuntimeConfig();
-    runtime.geminiApiKey = key;
-    writeRuntimeConfig(runtime);
-    previewBox.textContent = "Gemini key saved locally on this device.";
-  });
 
   analyzeBtn.addEventListener("click", async () => {
     if (analyzeInFlight) {
@@ -796,9 +779,12 @@ function buildRecipeFromEditors({ title, category, ingredientsText, stepsText, s
 }
 
 async function analyzeRecipeWithGemini(rawText) {
+  const backendResult = await tryAnalyzeViaBackend(rawText);
+  if (backendResult) return backendResult;
+
   const cfg = getSyncConfig();
   if (!cfg.geminiApiKey) {
-    throw new Error("Missing Gemini API key");
+    throw new Error("Missing Gemini API key and backend analyzer is unavailable");
   }
 
   const prompt = [
@@ -858,6 +844,27 @@ async function analyzeRecipeWithGemini(rawText) {
     }
   }
   throw new Error(lastError);
+}
+
+async function tryAnalyzeViaBackend(rawText) {
+  try {
+    const response = await fetch("/api/analyze-recipe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipeText: rawText }),
+    });
+    if (!response.ok) return null;
+    const parsed = await response.json();
+    if (!parsed || !Array.isArray(parsed.ingredients) || !Array.isArray(parsed.steps)) return null;
+    return {
+      title: String(parsed.title || "").trim(),
+      category: String(parsed.category || "Meal").trim(),
+      ingredients: parsed.ingredients.map((x) => String(x).trim()).filter(Boolean),
+      steps: parsed.steps.map((x) => String(x).trim()).filter(Boolean),
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function resolveAvailableGeminiModel(apiBase, apiKey, version) {
