@@ -27,4 +27,4 @@ const analytics = getAnalytics(app);
 -----
 
 GEMENI API Key:
-AIzaSyCUb0MIg07f9y0fqRsJpyUNuviV9-iN8-s
+AIzaSyABKe1h9aa0JAbrP-fRywNyzs5_mulU0SE
