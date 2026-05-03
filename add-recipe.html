@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recipe Atlas - Add Recipe</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="add">
+    <header class="site-header">
+      <a class="brand" href="index.html">Recipe Atlas</a>
+      <nav class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="recipes.html">All Recipes</a>
+        <a class="active" href="add-recipe.html">Add Recipe</a>
+      </nav>
+    </header>
+
+    <main class="container">
+      <section class="panel">
+        <div class="section-head">
+          <h1>Add Recipe</h1>
+        </div>
+        <div class="add-grid">
+          <div>
+            <label for="recipeUrl">Recipe URL</label>
+            <div class="inline-field">
+              <input id="recipeUrl" type="url" placeholder="https://example.com/recipe" />
+              <button id="fetchUrlBtn" class="btn btn-secondary" type="button">Fetch</button>
+            </div>
+            <p class="hint">
+              URL import works on some pages with readable structured data. If blocked, paste text below.
+            </p>
+          </div>
+          <div class="full">
+            <label for="recipeSource">Input Zone: paste original recipe text</label>
+            <textarea
+              id="recipeSource"
+              rows="13"
+              placeholder="Paste recipe text from WhatsApp, notes, or websites..."
+            ></textarea>
+          </div>
+          <div class="full actions">
+            <button id="analyzeBtn" class="btn btn-primary" type="button">Analyze Recipe with AI</button>
+            <button id="previewBtn" class="btn btn-secondary" type="button">Fallback Parse</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Preview and Edit</h2>
+        </div>
+        <div class="add-grid">
+          <div>
+            <label for="recipeTitle">Recipe Name</label>
+            <input id="recipeTitle" type="text" placeholder="Recipe name" />
+          </div>
+          <div>
+            <label for="recipeCategory">Category</label>
+            <select id="recipeCategory"></select>
+          </div>
+          <div class="full">
+            <label for="ingredientsEditor">Ingredients (one per line)</label>
+            <textarea id="ingredientsEditor" rows="8" placeholder="1 cup flour"></textarea>
+          </div>
+          <div class="full">
+            <label for="stepsEditor">Instructions (one step per line)</label>
+            <textarea id="stepsEditor" rows="8" placeholder="Preheat oven..."></textarea>
+          </div>
+          <div class="full actions">
+            <button id="saveBtn" class="btn btn-primary" type="button">Save to Cloud</button>
+          </div>
+        </div>
+        <div id="saveStatus" class="preview-box">Recipe preview will appear here after AI analysis.</div>
+      </section>
+    </main>
+
+    <script src="sync-config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

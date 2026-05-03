@@ -1,0 +1,30 @@
+npm install firebase
+
+-----
+
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBNS4nItItZ_ix5IaffLfsVNgys1fizfRI",
+  authDomain: "myrecipes-14261.firebaseapp.com",
+  projectId: "myrecipes-14261",
+  storageBucket: "myrecipes-14261.firebasestorage.app",
+  messagingSenderId: "301498378874",
+  appId: "1:301498378874:web:75483684f2b60e76b169c3",
+  measurementId: "G-DQCQT8G8WS"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
+-----
+
+GEMENI API Key:
+AIzaSyCUb0MIg07f9y0fqRsJpyUNuviV9-iN8-s
