@@ -780,7 +780,10 @@ function buildRecipeFromEditors({ title, category, ingredientsText, stepsText, s
 
 async function analyzeRecipeWithGemini(rawText) {
   const backendResult = await tryAnalyzeViaBackend(rawText);
-  if (backendResult) return backendResult;
+  if (backendResult.ok) return backendResult.data;
+  if (backendResult.error) {
+    throw new Error(`Backend analyzer error: ${backendResult.error}`);
+  }
 
   const cfg = getSyncConfig();
   if (!cfg.geminiApiKey) {
@@ -853,17 +856,29 @@ async function tryAnalyzeViaBackend(rawText) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipeText: rawText }),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      let serverMessage = `HTTP ${response.status}`;
+      try {
+        const errJson = await response.json();
+        serverMessage = errJson?.error || serverMessage;
+      } catch {}
+      return { ok: false, error: serverMessage };
+    }
     const parsed = await response.json();
-    if (!parsed || !Array.isArray(parsed.ingredients) || !Array.isArray(parsed.steps)) return null;
+    if (!parsed || !Array.isArray(parsed.ingredients) || !Array.isArray(parsed.steps)) {
+      return { ok: false, error: "Invalid backend response shape" };
+    }
     return {
-      title: String(parsed.title || "").trim(),
-      category: String(parsed.category || "Meal").trim(),
-      ingredients: parsed.ingredients.map((x) => String(x).trim()).filter(Boolean),
-      steps: parsed.steps.map((x) => String(x).trim()).filter(Boolean),
+      ok: true,
+      data: {
+        title: String(parsed.title || "").trim(),
+        category: String(parsed.category || "Meal").trim(),
+        ingredients: parsed.ingredients.map((x) => String(x).trim()).filter(Boolean),
+        steps: parsed.steps.map((x) => String(x).trim()).filter(Boolean),
+      },
     };
-  } catch {
-    return null;
+  } catch (err) {
+    return { ok: false, error: err?.message || "Network error while calling backend analyzer" };
   }
 }
 
