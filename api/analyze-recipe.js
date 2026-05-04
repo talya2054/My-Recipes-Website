@@ -26,40 +26,75 @@ export default async function handler(req, res) {
     recipeText,
   ].join("\n");
 
-  const model = "gemini-1.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const apiBase = "https://generativelanguage.googleapis.com";
+  const versions = ["v1", "v1beta"];
+  let lastError = "Unknown Gemini server error";
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2 },
-    }),
-  });
+  for (const version of versions) {
+    try {
+      const model = await resolveModel(apiBase, version, apiKey);
+      const endpoint = `${apiBase}/${version}/models/${model}:generateContent?key=${apiKey}`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2 },
+        }),
+      });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    return res.status(response.status).json({ error: errText });
+      if (!response.ok) {
+        const errText = await response.text();
+        lastError = `${version} ${response.status} ${errText}`;
+        continue;
+      }
+
+      const payload = await response.json();
+      const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        lastError = `${version} returned empty content`;
+        continue;
+      }
+
+      const parsed = safeJson(text) || safeJson((text.match(/\{[\s\S]*\}/) || [])[0] || "");
+      if (!parsed) {
+        lastError = `${version} returned invalid JSON`;
+        continue;
+      }
+
+      return res.status(200).json({
+        title: String(parsed.title || "").trim(),
+        category: String(parsed.category || "Meal").trim(),
+        ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients.map((x) => String(x).trim()).filter(Boolean) : [],
+        steps: Array.isArray(parsed.steps) ? parsed.steps.map((x) => String(x).trim()).filter(Boolean) : [],
+      });
+    } catch (err) {
+      lastError = err?.message || String(err);
+    }
   }
+  return res.status(502).json({ error: lastError });
+}
 
-  const payload = await response.json();
-  const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    return res.status(502).json({ error: "Gemini returned empty content" });
+async function resolveModel(apiBase, version, apiKey) {
+  const preferred = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash-latest"];
+  const listUrl = `${apiBase}/${version}/models?key=${apiKey}`;
+  const listResponse = await fetch(listUrl, { method: "GET" });
+  if (!listResponse.ok) {
+    const errText = await listResponse.text();
+    throw new Error(`ListModels ${version} failed: ${listResponse.status} ${errText}`);
   }
+  const payload = await listResponse.json();
+  const models = Array.isArray(payload.models) ? payload.models : [];
+  const supported = models
+    .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+    .map((m) => String(m.name || "").replace(/^models\//, ""))
+    .filter(Boolean);
 
-  const parsed = safeJson(text) || safeJson((text.match(/\{[\s\S]*\}/) || [])[0] || "");
-  if (!parsed) {
-    return res.status(502).json({ error: "Gemini returned invalid JSON" });
+  for (const wanted of preferred) {
+    if (supported.includes(wanted)) return wanted;
   }
-
-  return res.status(200).json({
-    title: String(parsed.title || "").trim(),
-    category: String(parsed.category || "Meal").trim(),
-    ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients.map((x) => String(x).trim()).filter(Boolean) : [],
-    steps: Array.isArray(parsed.steps) ? parsed.steps.map((x) => String(x).trim()).filter(Boolean) : [],
-  });
+  if (supported.length) return supported[0];
+  throw new Error(`No generateContent model is available for ${version}`);
 }
 
 function safeJson(value) {

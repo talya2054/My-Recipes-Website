@@ -781,72 +781,7 @@ function buildRecipeFromEditors({ title, category, ingredientsText, stepsText, s
 async function analyzeRecipeWithGemini(rawText) {
   const backendResult = await tryAnalyzeViaBackend(rawText);
   if (backendResult.ok) return backendResult.data;
-  if (backendResult.error) {
-    throw new Error(`Backend analyzer error: ${backendResult.error}`);
-  }
-
-  const cfg = getSyncConfig();
-  if (!cfg.geminiApiKey) {
-    throw new Error("Missing Gemini API key and backend analyzer is unavailable");
-  }
-
-  const prompt = [
-    "You are a recipe parser.",
-    "Return JSON only with keys: title, category, ingredients, steps.",
-    "All output must be in English.",
-    "Category must be one of: Meal, Dessert, Breakfast, Snack, Soup, Salad, Bread, Drink.",
-    "ingredients must be an array of strings.",
-    "steps must be an array of strings.",
-    "All temperatures in steps must be in Celsius only (e.g. 180C).",
-    "Recipe text:",
-    rawText,
-  ].join("\n");
-
-  const GEMINI_API_KEY = cfg.geminiApiKey;
-  const apiBase = "https://generativelanguage.googleapis.com";
-  const versions = ["v1", "v1beta"];
-  let lastError = "Unknown Gemini error";
-
-  for (const version of versions) {
-    try {
-      const selectedModel = await resolveAvailableGeminiModel(apiBase, GEMINI_API_KEY, version);
-      const url = `${apiBase}/${version}/models/${selectedModel}:generateContent?key=${GEMINI_API_KEY}`;
-      console.log("Full URL:", url.replace(GEMINI_API_KEY, "SECRET"));
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2 },
-        }),
-      });
-      if (!response.ok) {
-        const errText = await response.text();
-        lastError = `${version} ${response.status} ${errText}`;
-        continue;
-      }
-      const payload = await response.json();
-      const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) {
-        lastError = `${version} returned empty content`;
-        continue;
-      }
-      const parsed = safeParseJson(text);
-      if (!parsed) {
-        lastError = `${version} returned invalid JSON`;
-        continue;
-      }
-      return {
-        title: String(parsed.title || "").trim(),
-        category: String(parsed.category || "Meal").trim(),
-        ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients.map((x) => String(x).trim()).filter(Boolean) : [],
-        steps: Array.isArray(parsed.steps) ? parsed.steps.map((x) => String(x).trim()).filter(Boolean) : [],
-      };
-    } catch (err) {
-      lastError = err.message || String(err);
-    }
-  }
-  throw new Error(lastError);
+  throw new Error(`Backend analyzer error: ${backendResult.error || "Unknown backend error"}`);
 }
 
 async function tryAnalyzeViaBackend(rawText) {
