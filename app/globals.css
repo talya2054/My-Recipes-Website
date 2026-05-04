@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 350 100% 97%;
+    --foreground: 340 40% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 340 40% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 340 40% 18%;
+    --primary: 340 75% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 30% 92%;
+    --secondary-foreground: 340 40% 25%;
+    --muted: 340 20% 90%;
+    --muted-foreground: 340 20% 45%;
+    --accent: 340 60% 92%;
+    --accent-foreground: 340 50% 35%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 340 40% 88%;
+    --input: 340 40% 88%;
+    --ring: 340 75% 55%;
+    --radius: 1rem;
+
+    /* Custom strawberry theme colors */
+    --strawberry: 340 75% 55%;
+    --strawberry-light: 340 80% 92%;
+    --cream: 30 50% 97%;
+    --cream-dark: 30 30% 92%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+}
