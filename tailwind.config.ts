@@ -10,7 +10,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        sans: ['Quicksand', 'system-ui', 'sans-serif'],
       },
       colors: {
         background: "hsl(var(--background))",
@@ -49,6 +49,7 @@ const config: Config = {
         strawberry: {
           DEFAULT: "hsl(var(--strawberry))",
           light: "hsl(var(--strawberry-light))",
+          dark: "hsl(var(--strawberry-dark))",
         },
         cream: {
           DEFAULT: "hsl(var(--cream))",
@@ -57,25 +58,46 @@ const config: Config = {
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 4px)",
+        sm: "calc(var(--radius) - 8px)",
         xl: "calc(var(--radius) + 4px)",
         "2xl": "calc(var(--radius) + 8px)",
-        "3xl": "calc(var(--radius) + 12px)",
+        "3xl": "calc(var(--radius) + 16px)",
+        "4xl": "2.5rem",
       },
       boxShadow: {
-        'marshmallow': '0 8px 30px -8px rgba(227, 63, 118, 0.15)',
-        'marshmallow-hover': '0 12px 40px -8px rgba(227, 63, 118, 0.2)',
-        'soft': '0 4px 20px -4px rgba(227, 63, 118, 0.1)',
+        'marshmallow': '0 10px 40px -10px rgba(231, 134, 154, 0.25)',
+        'marshmallow-hover': '0 20px 50px -12px rgba(231, 134, 154, 0.35)',
+        'soft': '0 4px 24px -6px rgba(231, 134, 154, 0.15)',
+        'soft-lg': '0 8px 32px -8px rgba(231, 134, 154, 0.2)',
+        'inner-soft': 'inset 0 2px 8px rgba(231, 134, 154, 0.08)',
       },
       keyframes: {
         "float": {
           "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-5px)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+        "pulse-soft": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.7" },
+        },
+        "wiggle": {
+          "0%, 100%": { transform: "rotate(-2deg)" },
+          "50%": { transform: "rotate(2deg)" },
+        },
+        "scale-in": {
+          "0%": { transform: "scale(0.95)", opacity: "0" },
+          "100%": { transform: "scale(1)", opacity: "1" },
         },
       },
       animation: {
-        "float": "float 3s ease-in-out infinite",
+        "float": "float 4s ease-in-out infinite",
+        "pulse-soft": "pulse-soft 3s ease-in-out infinite",
+        "wiggle": "wiggle 1s ease-in-out infinite",
+        "scale-in": "scale-in 0.3s ease-out",
+      },
+      transitionTimingFunction: {
+        'marshmallow': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
     },
   },

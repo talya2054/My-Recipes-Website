@@ -6,6 +6,7 @@ import { HeroSection } from "@/components/hero-section"
 import { Categories } from "@/components/categories"
 import { RecipeGrid } from "@/components/recipe-grid"
 import { Recipe } from "@/components/recipe-card"
+import { Heart } from "lucide-react"
 
 const sampleRecipes: Recipe[] = [
   {
@@ -140,6 +141,11 @@ export default function RecipeDashboard() {
     )
   }
 
+  const getCategoryLabel = () => {
+    if (activeCategory === "all") return "All Recipes"
+    return `${activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Recipes`
+  }
+
   return (
     <div className="min-h-screen">
       <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
@@ -148,12 +154,15 @@ export default function RecipeDashboard() {
         <HeroSection />
         <Categories activeCategory={activeCategory} onCategoryChange={setActiveCategory} />
         
-        <section className="py-4">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-foreground">
-              {activeCategory === "all" ? "All Recipes" : `${activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Recipes`}
-            </h2>
-            <span className="text-sm text-muted-foreground bg-cream px-3 py-1.5 rounded-full">
+        <section className="py-6">
+          <div className="flex items-center justify-between mb-7">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground">
+                {getCategoryLabel()}
+              </h2>
+              <span className="hidden sm:inline-block text-lg">🍰</span>
+            </div>
+            <span className="text-sm font-semibold text-muted-foreground bg-card px-4 py-2 rounded-2xl shadow-soft">
               {filteredRecipes.length} {filteredRecipes.length === 1 ? "recipe" : "recipes"}
             </span>
           </div>
@@ -162,11 +171,17 @@ export default function RecipeDashboard() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border/50 bg-cream/30 py-8 mt-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
-          <p className="text-muted-foreground text-sm">
-            Made with 🍓 and lots of love • My Sweet Recipes © 2026
-          </p>
+      <footer className="border-t border-strawberry-light/50 bg-cream/50 py-10 mt-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🍓</span>
+              <span className="font-bold text-foreground">Strawberry Kitchen</span>
+            </div>
+            <p className="text-muted-foreground text-sm flex items-center gap-1.5">
+              Made with <Heart className="w-4 h-4 text-primary fill-primary inline" /> and lots of love © 2026
+            </p>
+          </div>
         </div>
       </footer>
     </div>

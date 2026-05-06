@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,32 +6,33 @@
 
 @layer base {
   :root {
-    --background: 350 100% 97%;
-    --foreground: 340 40% 18%;
+    --background: 10 40% 98%;
+    --foreground: 350 30% 25%;
     --card: 0 0% 100%;
-    --card-foreground: 340 40% 18%;
+    --card-foreground: 350 30% 25%;
     --popover: 0 0% 100%;
-    --popover-foreground: 340 40% 18%;
-    --primary: 340 75% 55%;
+    --popover-foreground: 350 30% 25%;
+    --primary: 350 70% 65%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 340 30% 92%;
-    --secondary-foreground: 340 40% 25%;
-    --muted: 340 20% 90%;
-    --muted-foreground: 340 20% 45%;
-    --accent: 340 60% 92%;
-    --accent-foreground: 340 50% 35%;
+    --secondary: 350 40% 94%;
+    --secondary-foreground: 350 30% 30%;
+    --muted: 30 30% 93%;
+    --muted-foreground: 350 15% 50%;
+    --accent: 350 50% 92%;
+    --accent-foreground: 350 40% 35%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 340 40% 88%;
-    --input: 340 40% 88%;
-    --ring: 340 75% 55%;
-    --radius: 1rem;
+    --border: 350 30% 90%;
+    --input: 350 30% 90%;
+    --ring: 350 70% 65%;
+    --radius: 1.25rem;
 
     /* Custom strawberry theme colors */
-    --strawberry: 340 75% 55%;
-    --strawberry-light: 340 80% 92%;
-    --cream: 30 50% 97%;
-    --cream-dark: 30 30% 92%;
+    --strawberry: 350 70% 65%;
+    --strawberry-light: 350 60% 94%;
+    --strawberry-dark: 350 70% 55%;
+    --cream: 35 50% 96%;
+    --cream-dark: 35 35% 91%;
   }
 }
 
@@ -41,6 +42,42 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: 'Quicksand', system-ui, sans-serif;
   }
+}
+
+/* Custom scrollbar for the cozy feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--cream));
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--strawberry-light));
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary));
+}
+
+/* Hide scrollbar for category buttons */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Soft focus styles */
+*:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.5);
+  outline-offset: 2px;
 }
