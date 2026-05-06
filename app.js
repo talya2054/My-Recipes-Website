@@ -1,54 +1,12 @@
-const APP_KEY = "recipe_atlas_v1";
-const DEFAULT_SYNC_CONFIG = {
-  enabled: false,
-  supabaseUrl: "",
-  anonKey: "",
-  table: "app_store",
-  rowId: "main",
-  firebaseProjectId: "",
-  firebaseApiKey: "",
-  geminiApiKey: "",
-  geminiModel: "gemini-1.5-flash",
-};
+const APP_KEY = "recipe_atlas_v2";
 const CATEGORIES = ["Meal", "Dessert", "Breakfast", "Snack", "Soup", "Salad", "Bread", "Drink"];
-
-const sampleRecipeText = `Lemon Olive Oil Cake
-Ingredients
-1 1/2 cups all-purpose flour
-2 tsp baking powder
-1/2 tsp salt
-3 large eggs
-3/4 cup sugar
-1/2 cup olive oil
-1/2 cup milk
-2 tbsp lemon juice
-1 tbsp lemon zest
-
-Instructions
-Preheat oven to 350F.
-Whisk flour, baking powder, and salt.
-Beat eggs and sugar until pale.
-Stream in olive oil and milk.
-Bake for 35 minutes.`;
-
-const substitutionMap = {
-  milk: ["oat milk", "almond milk"],
-  egg: ["flax egg", "applesauce"],
-  butter: ["olive oil", "coconut oil"],
-  sugar: ["brown sugar", "maple syrup"],
-  flour: ["cake flour", "1:1 gluten-free blend"],
-};
-
-let analyzeInFlight = false;
 
 init();
 
-async function init() {
-  await hydrateFromCloud();
+function init() {
   const store = loadStore();
-  if (!store.recipes.length) {
-    seedStore(store);
-  }
+  if (!store.recipes.length) seedStore(store);
+
   const page = document.body.dataset.page;
   if (page === "home") initHome();
   if (page === "recipes") initRecipes();
@@ -64,12 +22,62 @@ function loadStore() {
 
 function saveStore(store) {
   localStorage.setItem(APP_KEY, JSON.stringify(store));
-  queueCloudSave(store);
 }
 
 function seedStore(store) {
-  const parsed = parseRecipe(sampleRecipeText, "Dessert", "Lemon Olive Oil Cake");
-  store.recipes.push(parsed);
+  const recipe = {
+    id: `r_${Date.now()}`,
+    name: "Apple Pie",
+    category: "Dessert",
+    imageUrl: "",
+    prepTimeMin: 45,
+    totalTimeMin: 105,
+    servingsBase: 8,
+    sourceTitle: "Preppy Kitchen",
+    sourceUrl: "https://preppykitchen.com/orange-cake/#recipe",
+    modeLabel: "Baking",
+    ingredientGroups: [
+      {
+        name: "Dough",
+        items: [
+          makeIngredient("500 g Flour"),
+          makeIngredient("4 Eggs"),
+          makeIngredient("250 ml Milk"),
+          makeIngredient("200 g Butter"),
+        ],
+      },
+      {
+        name: "Filling",
+        items: [makeIngredient("6 Smith apples"), makeIngredient("50 g Sugar"), makeIngredient("1 tsp Cinnamon")],
+      },
+    ],
+    instructionGroups: [
+      {
+        name: "",
+        steps: [{ text: "Preheat the oven to 180C.", timerMin: null }],
+      },
+      {
+        name: "Dough",
+        steps: [
+          { text: "Mix Flour and Eggs until combined.", timerMin: null },
+          { text: "Chill in the fridge.", timerMin: 20 },
+        ],
+      },
+      {
+        name: "Filling",
+        steps: [
+          { text: "Slice the apples.", timerMin: null },
+          { text: "Boil mixture on ban-marie.", timerMin: 10 },
+          { text: "Bake.", timerMin: 50 },
+        ],
+      },
+    ],
+    notes: ["Store in an air tight container.", "You can replace the apples with pears."],
+    reviews: [],
+    snapshots: [],
+    createdAt: Date.now(),
+  };
+  store.recipes.push(recipe);
   saveStore(store);
 }
 
@@ -78,15 +86,13 @@ function initHome() {
   const stats = [
     { label: "Total recipes", value: String(store.recipes.length) },
     { label: "Categories used", value: String(new Set(store.recipes.map((r) => r.category)).size) },
-    { label: "Reviews", value: String(store.recipes.reduce((sum, r) => sum + r.reviews.length, 0)) },
+    { label: "Reviews", value: String(store.recipes.reduce((sum, r) => sum + (r.reviews || []).length, 0)) },
   ];
   document.querySelector("#statsGrid").innerHTML = stats
     .map((s) => `<article class="stat-card"><div class="stat-label">${escapeHtml(s.label)}</div><div class="stat-value">${s.value}</div></article>`)
     .join("");
-
   const recent = [...store.recipes].sort((a, b) => b.createdAt - a.createdAt).slice(0, 6);
   renderRecipeCards(recent, document.querySelector("#recentRecipes"));
-
   setupSyncControls();
 }
 
@@ -104,23 +110,18 @@ function initRecipes() {
   const draw = () => {
     const query = searchInput.value.trim().toLowerCase();
     const category = categoryFilter.value;
-    const sorted = [...store.recipes].filter((recipe) => {
+    const filtered = [...store.recipes].filter((recipe) => {
       const inCategory = category === "all" || recipe.category === category;
-      const haystack = [
-        recipe.title,
-        recipe.category,
-        recipe.ingredients.map((x) => `${x.name} ${x.original || ""}`).join(" "),
-        (recipe.steps || []).join(" "),
-      ]
-        .join(" ")
-        .toLowerCase();
+      const ingredientText = flattenIngredients(recipe).map((i) => `${i.name} ${i.original}`).join(" ");
+      const stepText = flattenSteps(recipe).map((s) => s.text).join(" ");
+      const haystack = `${recipe.name} ${recipe.category} ${ingredientText} ${stepText}`.toLowerCase();
       return inCategory && haystack.includes(query);
     });
 
-    if (sortBy.value === "name") sorted.sort((a, b) => a.title.localeCompare(b.title));
-    if (sortBy.value === "category") sorted.sort((a, b) => a.category.localeCompare(b.category));
-    if (sortBy.value === "newest") sorted.sort((a, b) => b.createdAt - a.createdAt);
-    renderRecipeCards(sorted, allRecipes);
+    if (sortBy.value === "name") filtered.sort((a, b) => a.name.localeCompare(b.name));
+    if (sortBy.value === "category") filtered.sort((a, b) => a.category.localeCompare(b.category));
+    if (sortBy.value === "newest") filtered.sort((a, b) => b.createdAt - a.createdAt);
+    renderRecipeCards(filtered, allRecipes);
   };
 
   [searchInput, categoryFilter, sortBy].forEach((el) => el.addEventListener("input", draw));
@@ -131,119 +132,100 @@ function initAddRecipe() {
   const store = loadStore();
   const editId = new URLSearchParams(location.search).get("edit");
   const editingRecipe = editId ? store.recipes.find((r) => r.id === editId) : null;
-  const category = document.querySelector("#recipeCategory");
-  const urlInput = document.querySelector("#recipeUrl");
+
   const titleInput = document.querySelector("#recipeTitle");
-  const source = document.querySelector("#recipeSource");
-  const previewBox = document.querySelector("#saveStatus");
+  const categoryInput = document.querySelector("#recipeCategory");
+  const imageInput = document.querySelector("#recipeImage");
+  const modeInput = document.querySelector("#recipeMode");
+  const prepInput = document.querySelector("#prepTime");
+  const totalInput = document.querySelector("#totalTime");
+  const servingsInput = document.querySelector("#servingsBase");
+  const sourceTitleInput = document.querySelector("#recipeSourceTitle");
+  const sourceUrlInput = document.querySelector("#recipeUrl");
+  const sourceTextInput = document.querySelector("#recipeSource");
   const ingredientsEditor = document.querySelector("#ingredientsEditor");
   const stepsEditor = document.querySelector("#stepsEditor");
-  const analyzeBtn = document.querySelector("#analyzeBtn");
+  const notesEditor = document.querySelector("#notesEditor");
   const previewBtn = document.querySelector("#previewBtn");
   const saveBtn = document.querySelector("#saveBtn");
   const fetchBtn = document.querySelector("#fetchUrlBtn");
+  const status = document.querySelector("#saveStatus");
 
-  category.innerHTML = CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join("");
-  const activeCfg = getSyncConfig();
+  categoryInput.innerHTML = CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join("");
+
   if (editingRecipe) {
-    titleInput.value = editingRecipe.title;
-    category.value = editingRecipe.category;
-    ingredientsEditor.value = editingRecipe.ingredients.map((x) => x.original || x.name).join("\n");
-    stepsEditor.value = (editingRecipe.steps || []).join("\n");
-    source.value = editingRecipe.sourceText || "";
-    urlInput.value = editingRecipe.sourceUrl || "";
-    previewBox.textContent = "Editing mode: update fields and save.";
-    saveBtn.textContent = "Update in Cloud";
+    titleInput.value = editingRecipe.name;
+    categoryInput.value = editingRecipe.category;
+    imageInput.value = editingRecipe.imageUrl || "";
+    modeInput.value = editingRecipe.modeLabel || "Cooking";
+    prepInput.value = editingRecipe.prepTimeMin || "";
+    totalInput.value = editingRecipe.totalTimeMin || "";
+    servingsInput.value = editingRecipe.servingsBase || 8;
+    sourceTitleInput.value = editingRecipe.sourceTitle || "";
+    sourceUrlInput.value = editingRecipe.sourceUrl || "";
+    sourceTextInput.value = "";
+    ingredientsEditor.value = groupsToEditor(editingRecipe.ingredientGroups, (item) => item.original || item.name);
+    stepsEditor.value = instructionGroupsToEditor(editingRecipe.instructionGroups);
+    notesEditor.value = (editingRecipe.notes || []).join("\n");
+    saveBtn.textContent = "Update Recipe";
+    status.textContent = "Editing existing recipe.";
   }
 
-  analyzeBtn.addEventListener("click", async () => {
-    if (analyzeInFlight) {
-      previewBox.textContent = "AI request already in progress. Please wait.";
-      return;
-    }
-    const raw = source.value.trim();
-    if (!raw) {
-      previewBox.textContent = "Please paste a recipe first.";
-      return;
-    }
-    previewBox.textContent = "Analyzing with AI...";
-    analyzeInFlight = true;
-    analyzeBtn.disabled = true;
-    try {
-      const aiRecipe = await analyzeRecipeWithGemini(raw);
-      titleInput.value = aiRecipe.title || titleInput.value;
-      if (CATEGORIES.includes(aiRecipe.category)) category.value = aiRecipe.category;
-      ingredientsEditor.value = (aiRecipe.ingredients || []).join("\n");
-      stepsEditor.value = (aiRecipe.steps || []).map(convertFahrenheitTextToCelsius).join("\n");
-      previewBox.textContent = "AI analysis complete. You can edit anything before saving.";
-    } catch (error) {
-      const parsed = parseRecipe(source.value, category.value, titleInput.value.trim());
-      if (!titleInput.value.trim()) titleInput.value = parsed.title;
-      if (!ingredientsEditor.value.trim()) ingredientsEditor.value = parsed.ingredients.map((x) => x.original).join("\n");
-      if (!stepsEditor.value.trim()) stepsEditor.value = parsed.steps.map(convertFahrenheitTextToCelsius).join("\n");
-      previewBox.textContent = `AI analysis failed: ${error.message}. Fallback Parse was applied automatically.`;
-    } finally {
-      analyzeInFlight = false;
-      analyzeBtn.disabled = false;
-    }
-  });
-
   previewBtn.addEventListener("click", () => {
-    const parsed = parseRecipe(source.value, category.value, titleInput.value.trim());
-    titleInput.value = parsed.title;
-    ingredientsEditor.value = parsed.ingredients.map((x) => x.original).join("\n");
-    stepsEditor.value = parsed.steps.map(convertFahrenheitTextToCelsius).join("\n");
-    previewBox.innerHTML = `${renderPreview(parsed)}<p>Fallback parse loaded into editable fields.</p>`;
-  });
-
-  saveBtn.addEventListener("click", async () => {
-    const parsed = buildRecipeFromEditors({
-      title: titleInput.value.trim(),
-      category: category.value,
-      ingredientsText: ingredientsEditor.value,
-      stepsText: stepsEditor.value,
-      sourceText: source.value,
-    });
-    if (urlInput.value.trim()) parsed.sourceUrl = urlInput.value.trim();
-    if (editingRecipe) {
-      const idx = store.recipes.findIndex((r) => r.id === editingRecipe.id);
-      if (idx >= 0) {
-        parsed.id = editingRecipe.id;
-        parsed.createdAt = editingRecipe.createdAt;
-        parsed.reviews = editingRecipe.reviews || [];
-        parsed.snapshots = editingRecipe.snapshots || [];
-        store.recipes[idx] = parsed;
-      } else {
-        store.recipes.push(parsed);
-      }
-    } else {
-      store.recipes.push(parsed);
-    }
-    saveStore(store);
-    previewBox.textContent = "Saving to cloud...";
-    try {
-      await saveRecipeToFirestore(parsed);
-      previewBox.textContent = "Recipe saved successfully!";
-      location.href = `recipe.html?id=${parsed.id}`;
-    } catch (error) {
-      previewBox.textContent = "Saved locally, but cloud save failed. Check Firebase config and rules.";
-      location.href = `recipe.html?id=${parsed.id}`;
-    }
+    const parsed = parseRecipeLoose(sourceTextInput.value, categoryInput.value, titleInput.value.trim());
+    if (!titleInput.value.trim()) titleInput.value = parsed.name;
+    ingredientsEditor.value = groupsToEditor(parsed.ingredientGroups, (item) => item.original);
+    stepsEditor.value = instructionGroupsToEditor(parsed.instructionGroups);
+    status.textContent = "Parsed raw text into template fields. Adjust as needed.";
   });
 
   fetchBtn.addEventListener("click", async () => {
-    const url = urlInput.value.trim();
+    const url = sourceUrlInput.value.trim();
     if (!url) return;
-    previewBox.textContent = "Importing from link...";
+    status.textContent = "Importing text from URL...";
     try {
       const text = await fetchRecipeTextFromUrl(url);
-      source.value = text.slice(0, 18000);
-      if (!titleInput.value.trim()) {
-        titleInput.value = guessTitleFromText(text) || "";
-      }
-      previewBox.textContent = "Link import completed. You can run AI analysis now.";
+      sourceTextInput.value = text.slice(0, 18000);
+      if (!titleInput.value.trim()) titleInput.value = guessTitleFromText(text) || "";
+      status.textContent = "Imported source text successfully.";
     } catch (err) {
-      previewBox.textContent = `Could not import this link automatically: ${err.message}`;
+      status.textContent = `Import failed: ${err.message}`;
+    }
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    const recipe = buildRecipeFromTemplate({
+      id: editingRecipe?.id,
+      title: titleInput.value.trim(),
+      category: categoryInput.value,
+      imageUrl: imageInput.value.trim(),
+      mode: modeInput.value,
+      prepTimeMin: Number(prepInput.value || 0),
+      totalTimeMin: Number(totalInput.value || 0),
+      servingsBase: Number(servingsInput.value || 1),
+      sourceTitle: sourceTitleInput.value.trim(),
+      sourceUrl: sourceUrlInput.value.trim(),
+      ingredientsText: ingredientsEditor.value,
+      stepsText: stepsEditor.value,
+      notesText: notesEditor.value,
+      carry: editingRecipe,
+    });
+
+    if (editingRecipe) {
+      const idx = store.recipes.findIndex((r) => r.id === editingRecipe.id);
+      if (idx >= 0) store.recipes[idx] = recipe;
+      else store.recipes.push(recipe);
+    } else {
+      store.recipes.push(recipe);
+    }
+
+    saveStore(store);
+    status.textContent = "Recipe saved successfully!";
+    try {
+      await saveRecipeToFirestore(recipe);
+      location.href = `recipe.html?id=${encodeURIComponent(recipe.id)}`;
+    } catch {
+      location.href = `recipe.html?id=${encodeURIComponent(recipe.id)}`;
     }
   });
 }
@@ -257,108 +239,100 @@ function initDetail() {
     return;
   }
 
-  const recipeName = document.querySelector("#recipeName");
-  const categoryTag = document.querySelector("#recipeCategoryTag");
+  recipe.ingredientGroups = recipe.ingredientGroups || [{ name: "", items: recipe.ingredients || [] }];
+  recipe.instructionGroups = recipe.instructionGroups || [{ name: "", steps: (recipe.steps || []).map((s) => ({ text: s, timerMin: null })) }];
+  recipe.notes = recipe.notes || [];
+
+  const nameNode = document.querySelector("#recipeName");
+  const categoryNode = document.querySelector("#recipeCategoryTag");
+  const imageNode = document.querySelector("#recipeImageView");
+  const timeLine = document.querySelector("#timeLine");
+  const servingsLine = document.querySelector("#servingsLine");
+  const sourceLine = document.querySelector("#sourceLine");
+  const servingsRange = document.querySelector("#servingsRange");
+  const servingsValue = document.querySelector("#servingsValue");
+  const unitView = document.querySelector("#unitView");
   const ingredientList = document.querySelector("#ingredientList");
   const stepList = document.querySelector("#stepList");
-  const scaleSelect = document.querySelector("#scaleSelect");
-  const customScale = document.querySelector("#customScale");
-  const applyScale = document.querySelector("#applyScale");
+  const notesList = document.querySelector("#notesList");
   const scaleHint = document.querySelector("#scaleHint");
   const cookModeBtn = document.querySelector("#cookModeBtn");
   const printBtn = document.querySelector("#printBtn");
-  const editRecipeBtn = document.querySelector("#editRecipeBtn");
+  const editBtn = document.querySelector("#editRecipeBtn");
+  const snapshotBtn = document.querySelector("#snapshotBtn");
+  const snapshotList = document.querySelector("#snapshotList");
   const reviewText = document.querySelector("#reviewText");
   const reviewRating = document.querySelector("#reviewRating");
   const reviewImage = document.querySelector("#reviewImage");
   const saveReviewBtn = document.querySelector("#saveReviewBtn");
-  const snapshotBtn = document.querySelector("#snapshotBtn");
-  const snapshotList = document.querySelector("#snapshotList");
-  const subIngredient = document.querySelector("#subIngredient");
-  const subSuggestBtn = document.querySelector("#subSuggestBtn");
-  const subResult = document.querySelector("#subResult");
+  const reviewList = document.querySelector("#reviewList");
 
-  if (!Array.isArray(recipe.snapshots)) recipe.snapshots = [];
+  nameNode.textContent = recipe.name;
+  categoryNode.textContent = recipe.category;
+  imageNode.src = recipe.imageUrl || "https://images.unsplash.com/photo-1551024506-0bccd828d307?w=1200&q=80&auto=format&fit=crop";
+  timeLine.textContent = `Prep Time ${formatMin(recipe.prepTimeMin)} | Total Time ${formatMin(recipe.totalTimeMin)}`;
+  sourceLine.innerHTML = recipe.sourceUrl
+    ? `Source <a href="${escapeAttr(recipe.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(recipe.sourceTitle || "Original recipe")}</a>`
+    : "Source not provided";
 
-  recipeName.textContent = recipe.title;
-  categoryTag.textContent = recipe.category;
-  let currentScale = 1;
+  const base = Math.max(1, Number(recipe.servingsBase || 1));
+  servingsRange.min = String(Math.max(1, Math.round(base / base)));
+  servingsRange.max = String(Math.max(4 * base, base));
+  servingsRange.value = String(base);
+  let selectedServings = base;
   let wakeLock = null;
 
-  const render = () => {
-    ingredientList.innerHTML = recipe.ingredients.map((item) => renderIngredient(item, currentScale)).join("");
-    stepList.innerHTML = recipe.steps.map((step) => renderStep(step, currentScale, recipe.ingredients)).join("");
-    renderReviews(recipe.reviews);
-    renderSnapshots(recipe.snapshots, snapshotList);
-    subIngredient.innerHTML = recipe.ingredients
-      .map((item, idx) => `<option value="${idx}">${escapeHtml(item.name)}</option>`)
-      .join("");
-    scaleHint.textContent =
-      currentScale === 1
-        ? "Scale 1x: showing grams/ml plus original measurements."
-        : `Scale ${currentScale}x: showing scaled metric values only.`;
+  function render() {
+    const scale = selectedServings / base;
+    servingsValue.textContent = String(selectedServings);
+    servingsLine.textContent = `Servings ${base} (scale: ${Math.round(base / base)} to ${4 * base})`;
+    scaleHint.textContent = scale === 1 ? "1x: metric plus original amounts." : `${strip(scale)}x: metric view only.`;
+
+    ingredientList.innerHTML = renderIngredientGroups(recipe.ingredientGroups, scale, unitView.value);
+    stepList.innerHTML = renderInstructionGroups(recipe.instructionGroups, recipe.ingredientGroups, scale);
+    notesList.innerHTML = recipe.notes.length ? recipe.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("") : `<li>No notes yet.</li>`;
+    renderSnapshots(recipe.snapshots || [], snapshotList);
+    renderReviews(recipe.reviews || [], reviewList);
     wireStepTimers();
-  };
+  }
 
-  scaleSelect.addEventListener("change", () => {
-    currentScale = Number(scaleSelect.value);
-    customScale.value = "";
+  servingsRange.addEventListener("input", () => {
+    selectedServings = Number(servingsRange.value);
     render();
   });
-
-  applyScale.addEventListener("click", () => {
-    const custom = Number(customScale.value);
-    if (!custom || custom <= 0) return;
-    currentScale = custom;
-    scaleSelect.value = "1";
-    render();
-  });
+  unitView.addEventListener("change", render);
 
   cookModeBtn.addEventListener("click", async () => {
     if (!("wakeLock" in navigator)) {
-      cookModeBtn.textContent = "Wake lock unavailable";
+      cookModeBtn.textContent = `${recipe.modeLabel || "Cooking"} Mode Unavailable`;
       return;
     }
     try {
       if (wakeLock) {
         await wakeLock.release();
         wakeLock = null;
-        cookModeBtn.textContent = "Cook Mode";
+        cookModeBtn.textContent = `${recipe.modeLabel || "Cooking"} Mode`;
       } else {
         wakeLock = await navigator.wakeLock.request("screen");
-        cookModeBtn.textContent = "Cook Mode On";
-        wakeLock.addEventListener("release", () => {
-          cookModeBtn.textContent = "Cook Mode";
-          wakeLock = null;
-        });
+        cookModeBtn.textContent = `${recipe.modeLabel || "Cooking"} Mode On`;
       }
     } catch {
-      cookModeBtn.textContent = "Wake lock blocked";
-    }
-  });
-
-  document.addEventListener("visibilitychange", async () => {
-    if (document.visibilityState === "visible" && wakeLock === null && cookModeBtn.textContent === "Cook Mode On") {
-      try {
-        wakeLock = await navigator.wakeLock.request("screen");
-      } catch {
-        cookModeBtn.textContent = "Wake lock blocked";
-      }
+      cookModeBtn.textContent = `${recipe.modeLabel || "Cooking"} Mode Blocked`;
     }
   });
 
   printBtn.addEventListener("click", () => window.print());
-  editRecipeBtn.addEventListener("click", () => {
+  editBtn.addEventListener("click", () => {
     location.href = `add-recipe.html?edit=${encodeURIComponent(recipe.id)}`;
   });
 
   snapshotBtn.addEventListener("click", () => {
+    recipe.snapshots = recipe.snapshots || [];
     recipe.snapshots.unshift({
       id: `s_${Date.now()}`,
       createdAt: Date.now(),
-      scale: currentScale,
-      ingredients: recipe.ingredients.map((x) => ({ ...x })),
-      steps: [...recipe.steps],
+      servings: selectedServings,
+      unitView: unitView.value,
     });
     saveStore(store);
     render();
@@ -368,8 +342,9 @@ function initDetail() {
     const text = reviewText.value.trim();
     if (!text) return;
     const image = await fileToDataUrl(reviewImage.files[0]);
+    recipe.reviews = recipe.reviews || [];
     recipe.reviews.unshift({
-      id: String(Date.now()),
+      id: `rv_${Date.now()}`,
       text,
       rating: Number(reviewRating.value),
       image: image || "",
@@ -378,22 +353,7 @@ function initDetail() {
     saveStore(store);
     reviewText.value = "";
     reviewImage.value = "";
-    reviewRating.value = "5";
     render();
-  });
-
-  subSuggestBtn.addEventListener("click", () => {
-    const idx = Number(subIngredient.value);
-    const item = recipe.ingredients[idx];
-    if (!item) return;
-    const key = Object.keys(substitutionMap).find((k) => item.name.toLowerCase().includes(k));
-    const swaps = key ? substitutionMap[key] : ["closest same-role ingredient", "check flavor balance"];
-    subResult.innerHTML = `
-      <article class="review-card">
-        <p><strong>${escapeHtml(item.name)}</strong></p>
-        <p>${swaps.map((s) => escapeHtml(s)).join(", ")}</p>
-      </article>
-    `;
   });
 
   render();
@@ -405,65 +365,235 @@ function renderRecipeCards(recipes, target) {
     return;
   }
   target.innerHTML = recipes
-    .map(
-      (r) => `
-      <article class="recipe-card">
-        <h3>${escapeHtml(r.title)}</h3>
+    .map((r) => {
+      const img = r.imageUrl || "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=800&q=80&auto=format&fit=crop";
+      return `<article class="recipe-card">
+        <img class="card-image" src="${escapeAttr(img)}" alt="${escapeAttr(r.name)}" />
+        <h3>${escapeHtml(r.name)}</h3>
         <p>${escapeHtml(r.category)}</p>
-        <p class="hint">${r.ingredients.length} ingredients</p>
+        <p class="hint">${flattenIngredients(r).length} ingredients</p>
         <a class="btn btn-secondary" href="recipe.html?id=${encodeURIComponent(r.id)}">Open</a>
-      </article>
-    `,
-    )
+      </article>`;
+    })
     .join("");
 }
 
-function renderPreview(recipe) {
-  return `
-    <h3>${escapeHtml(recipe.title)}</h3>
-    <p class="hint">${escapeHtml(recipe.category)}</p>
-    <p><strong>Ingredients:</strong> ${recipe.ingredients.length}</p>
-    <p><strong>Steps:</strong> ${recipe.steps.length}</p>
-  `;
+function buildRecipeFromTemplate(input) {
+  const ingredientGroups = parseIngredientGroups(input.ingredientsText);
+  const instructionGroups = parseInstructionGroups(input.stepsText);
+  return {
+    id: input.id || `r_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: input.title || "Untitled Recipe",
+    category: input.category || "Meal",
+    imageUrl: input.imageUrl || "",
+    prepTimeMin: Number(input.prepTimeMin || 0),
+    totalTimeMin: Number(input.totalTimeMin || 0),
+    servingsBase: Math.max(1, Number(input.servingsBase || 1)),
+    sourceTitle: input.sourceTitle || "",
+    sourceUrl: input.sourceUrl || "",
+    modeLabel: input.mode || "Cooking",
+    ingredientGroups,
+    instructionGroups,
+    notes: input.notesText.split("\n").map((v) => v.trim()).filter(Boolean),
+    reviews: input.carry?.reviews || [],
+    snapshots: input.carry?.snapshots || [],
+    createdAt: input.carry?.createdAt || Date.now(),
+  };
 }
 
-function renderIngredient(item, scale) {
-  const grams = round(item.grams * scale);
-  const hasLiquid = item.isLiquid;
-  const ml = hasLiquid ? round(item.ml * scale) : null;
-  if (scale === 1) {
-    const base = hasLiquid
-      ? `${grams} g (${ml} ml)`
-      : `${grams} g`;
-    return `<li><strong>${escapeHtml(item.name)}</strong>: ${base} <span class="original-amount">| original: ${escapeHtml(item.original)}</span></li>`;
-  }
-  return hasLiquid
-    ? `<li><strong>${escapeHtml(item.name)}</strong>: ${grams} g (${ml} ml)</li>`
-    : `<li><strong>${escapeHtml(item.name)}</strong>: ${grams} g</li>`;
-}
-
-function renderStep(step, scale, ingredients) {
-  const normalizedStep = convertFahrenheitTextToCelsius(step);
-  const enrichedStep = injectIngredientAmountsIntoStep(normalizedStep, ingredients || [], scale);
-  const withTimer = enrichedStep.replace(/(\d+)\s*min/gi, (match, mins) => {
-    const scaled = Math.max(1, round(Number(mins) * scale));
-    return `${scaled} min <span class="timer-actions"><button class="timer-chip start" type="button" data-minutes="${scaled}">Start ${scaled}m</button> <button class="timer-chip reset" type="button" data-minutes="${scaled}">Reset</button></span>`;
+function parseRecipeLoose(text, category, title) {
+  const lines = text.replace(/\r/g, "").split("\n").map((l) => l.trim()).filter(Boolean);
+  let mode = "intro";
+  const ingredientLines = [];
+  const steps = [];
+  lines.forEach((line, idx) => {
+    if (idx === 0 && !title) return;
+    if (/^ingredients?/i.test(line)) {
+      mode = "ingredients";
+      return;
+    }
+    if (/^instructions?|^method|^steps/i.test(line)) {
+      mode = "steps";
+      return;
+    }
+    if (mode === "ingredients") ingredientLines.push(line);
+    if (mode === "steps") steps.push(line);
   });
-  return `<li class="step-item">${escapeHtmlKeepButtons(withTimer)}</li>`;
+  if (!ingredientLines.length) ingredientLines.push(...lines.filter((l) => /^\d|^[\d\/]+\s/.test(l)));
+  if (!steps.length) steps.push(...lines.filter((l) => /\b(preheat|mix|stir|bake|cook|boil|chill)\b/i.test(l)));
+
+  return {
+    name: title || lines[0] || "Untitled Recipe",
+    category: category || "Meal",
+    ingredientGroups: [{ name: "", items: ingredientLines.map(makeIngredient) }],
+    instructionGroups: [{ name: "", steps: steps.map(makeStep) }],
+  };
+}
+
+function parseIngredientGroups(text) {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const groups = [];
+  let current = { name: "", items: [] };
+  lines.forEach((raw) => {
+    const line = raw.trim();
+    if (!line) return;
+    const match = line.match(/^\[(.+)\]$/);
+    if (match) {
+      if (current.items.length || current.name) groups.push(current);
+      current = { name: match[1].trim(), items: [] };
+      return;
+    }
+    current.items.push(makeIngredient(line));
+  });
+  if (current.items.length || current.name) groups.push(current);
+  return groups.length ? groups : [{ name: "", items: [] }];
+}
+
+function parseInstructionGroups(text) {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const groups = [];
+  let current = { name: "", steps: [] };
+  lines.forEach((raw) => {
+    const line = raw.trim();
+    if (!line) return;
+    const header = line.match(/^\[(.+)\]$/);
+    if (header) {
+      if (current.steps.length || current.name) groups.push(current);
+      current = { name: header[1].trim(), steps: [] };
+      return;
+    }
+    current.steps.push(makeStep(line));
+  });
+  if (current.steps.length || current.name) groups.push(current);
+  return groups.length ? groups : [{ name: "", steps: [] }];
+}
+
+function makeIngredient(line) {
+  const parsed = parseAmount(line);
+  const rest = line.replace(parsed.raw, "").trim();
+  const name = rest || line;
+  const isLiquid = /\b(milk|water|oil|juice|broth|cream)\b/i.test(name);
+  const grams = parsed.value * resolveGramsPerUnit(parsed.unit, name);
+  const ml = isLiquid ? parsed.value * resolveMlPerUnit(parsed.unit) : 0;
+  return {
+    name,
+    original: line,
+    grams: Math.max(1, round(grams)),
+    ml: Math.max(0, round(ml)),
+    isLiquid,
+  };
+}
+
+function makeStep(line) {
+  const text = line.replace(/^\d+[.)]\s*/, "").trim();
+  const timerMatch = text.match(/timer:\s*(\d+)\s*min/i) || text.match(/(\d+)\s*min/i);
+  return {
+    text: convertFahrenheitTextToCelsius(text.replace(/\(.*timer:.*\)/i, "").trim() || text),
+    timerMin: timerMatch ? Number(timerMatch[1]) : null,
+  };
+}
+
+function renderIngredientGroups(groups, scale, unitView) {
+  return groups
+    .map((group) => {
+      const name = group.name ? `<h3 class="group-title">${escapeHtml(group.name)}</h3>` : "";
+      const items = group.items
+        .map((item) => {
+          const grams = round(item.grams * scale);
+          const ml = round(item.ml * scale);
+          const metric = item.isLiquid ? `${grams} g / ${ml} ml` : `${grams} g`;
+          const text = unitView === "original"
+            ? (scale === 1 ? item.original : metric)
+            : metric;
+          const original = unitView === "metric" && scale === 1 ? `<span class="original-amount">| original: ${escapeHtml(item.original)}</span>` : "";
+          return `<li><strong>${escapeHtml(item.name)}</strong>: ${escapeHtml(text)} ${original}</li>`;
+        })
+        .join("");
+      return `${name}<ul class="list">${items}</ul>`;
+    })
+    .join("");
+}
+
+function renderInstructionGroups(groups, ingredientGroups, scale) {
+  const ingredients = ingredientGroups.flatMap((g) => g.items);
+  return groups
+    .map((group) => {
+      const name = group.name ? `<h3 class="group-title">${escapeHtml(group.name)}</h3>` : "";
+      const steps = group.steps
+        .map((step) => {
+          const text = injectIngredientAmountsIntoStep(step.text, ingredients, scale);
+          const timer = step.timerMin
+            ? `<span class="timer-actions"><button class="timer-chip start" type="button" data-minutes="${Math.max(1, Math.round(step.timerMin * scale))}">Start ${Math.max(1, Math.round(step.timerMin * scale))}m</button><button class="timer-chip reset" type="button" data-minutes="${Math.max(1, Math.round(step.timerMin * scale))}">Reset</button></span>`
+            : "";
+          return `<li class="step-item">${escapeHtml(text)} ${timer}</li>`;
+        })
+        .join("");
+      return `${name}<ol class="list">${steps}</ol>`;
+    })
+    .join("");
+}
+
+function groupsToEditor(groups, formatter) {
+  return groups
+    .map((group) => {
+      const lines = [];
+      if (group.name) lines.push(`[${group.name}]`);
+      group.items.forEach((item) => lines.push(formatter(item)));
+      return lines.join("\n");
+    })
+    .join("\n");
+}
+
+function instructionGroupsToEditor(groups) {
+  return groups
+    .map((group) => {
+      const lines = [];
+      if (group.name) lines.push(`[${group.name}]`);
+      group.steps.forEach((step, idx) => {
+        const timer = step.timerMin ? ` (timer: ${step.timerMin} min)` : "";
+        lines.push(`${idx + 1} ${step.text}${timer}`);
+      });
+      return lines.join("\n");
+    })
+    .join("\n");
+}
+
+function flattenIngredients(recipe) {
+  const groups = recipe.ingredientGroups || [{ name: "", items: recipe.ingredients || [] }];
+  return groups.flatMap((g) => g.items || []);
+}
+
+function flattenSteps(recipe) {
+  const groups = recipe.instructionGroups || [{ name: "", steps: (recipe.steps || []).map((s) => ({ text: s, timerMin: null })) }];
+  return groups.flatMap((g) => g.steps || []);
+}
+
+function renderSnapshots(snapshots, target) {
+  if (!snapshots || !snapshots.length) {
+    target.innerHTML = `<div class="empty">No snapshots yet.</div>`;
+    return;
+  }
+  target.innerHTML = snapshots
+    .map((snap) => `<article class="review-card"><p><strong>${escapeHtml(new Date(snap.createdAt).toLocaleString())}</strong> | servings ${snap.servings}</p></article>`)
+    .join("");
+}
+
+function renderReviews(reviews, target) {
+  if (!reviews || !reviews.length) {
+    target.innerHTML = `<div class="empty">No reviews yet.</div>`;
+    return;
+  }
+  target.innerHTML = reviews
+    .map((r) => `<article class="review-card"><p><strong>Rating:</strong> ${r.rating}/5</p><p>${escapeHtml(r.text)}</p>${r.image ? `<img src="${r.image}" alt="Recipe result photo" />` : ""}</article>`)
+    .join("");
 }
 
 function wireStepTimers() {
-  document.querySelectorAll(".timer-chip.start").forEach((button) => {
-    button.addEventListener("click", () => {
-      const minutes = Number(button.dataset.minutes);
-      startCountdown(button, minutes * 60);
-    });
+  document.querySelectorAll(".timer-chip.start").forEach((btn) => {
+    btn.addEventListener("click", () => startCountdown(btn, Number(btn.dataset.minutes) * 60));
   });
-  document.querySelectorAll(".timer-chip.reset").forEach((button) => {
-    button.addEventListener("click", () => {
-      const minutes = Number(button.dataset.minutes);
-      resetCountdown(button, minutes * 60);
-    });
+  document.querySelectorAll(".timer-chip.reset").forEach((btn) => {
+    btn.addEventListener("click", () => resetCountdown(btn, Number(btn.dataset.minutes)));
   });
 }
 
@@ -475,13 +605,9 @@ function startCountdown(button, secondsLeft) {
     const s = String(secondsLeft % 60).padStart(2, "0");
     button.textContent = `${m}:${s}`;
     if (secondsLeft === 0) {
-      button.textContent = "Done";
       button.disabled = false;
+      button.textContent = "Done";
       button.dataset.timerId = "";
-      try {
-        const audio = new Audio("data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=");
-        audio.play();
-      } catch {}
       return;
     }
     secondsLeft -= 1;
@@ -491,131 +617,101 @@ function startCountdown(button, secondsLeft) {
   tick();
 }
 
-function resetCountdown(resetButton, seconds) {
+function resetCountdown(resetButton, minutes) {
   const host = resetButton.parentElement;
-  if (!host) return;
-  const startBtn = host.querySelector(".timer-chip.start");
+  const startBtn = host ? host.querySelector(".timer-chip.start") : null;
   if (!startBtn) return;
   clearTimerForButton(startBtn);
   startBtn.disabled = false;
-  startBtn.textContent = `Start ${Math.max(1, Math.round(seconds / 60))}m`;
+  startBtn.textContent = `Start ${minutes}m`;
 }
 
-function clearTimerForButton(startButton) {
-  const timerId = Number(startButton.dataset.timerId || "0");
+function clearTimerForButton(button) {
+  const timerId = Number(button.dataset.timerId || 0);
   if (timerId) clearTimeout(timerId);
-  startButton.dataset.timerId = "";
+  button.dataset.timerId = "";
 }
 
-function renderReviews(reviews) {
-  const reviewList = document.querySelector("#reviewList");
-  if (!reviews.length) {
-    reviewList.innerHTML = `<div class="empty">No reviews yet.</div>`;
-    return;
-  }
-  reviewList.innerHTML = reviews
-    .map((r) => {
-      return `
-        <article class="review-card">
-          <p><strong>Rating:</strong> ${r.rating}/5</p>
-          <p>${escapeHtml(r.text)}</p>
-          ${r.image ? `<img src="${r.image}" alt="Recipe result photo" />` : ""}
-        </article>
-      `;
-    })
-    .join("");
-}
-
-function renderSnapshots(snapshots, target) {
-  if (!snapshots.length) {
-    target.innerHTML = `<div class="empty">No snapshots yet.</div>`;
-    return;
-  }
-  target.innerHTML = snapshots
-    .map((snap) => {
-      const date = new Date(snap.createdAt).toLocaleString();
-      return `
-        <article class="review-card">
-          <p><strong>${escapeHtml(date)}</strong> | scale ${snap.scale}x</p>
-          <p>${snap.ingredients.length} ingredients captured.</p>
-        </article>
-      `;
-    })
-    .join("");
-}
-
-function parseRecipe(text, category, explicitTitle) {
-  const normalized = text.replace(/\r/g, "");
-  const lines = normalized.split("\n").map((l) => l.trim()).filter(Boolean);
-  const title = explicitTitle || lines[0] || "Untitled Recipe";
-  let mode = "intro";
-  const ingredientLines = [];
-  const steps = [];
-
-  lines.slice(1).forEach((line) => {
-    if (/^(ingredients?|what you need)$/i.test(line)) {
-      mode = "ing";
-      return;
-    }
-    if (/^(instructions?|directions?|method|steps)$/i.test(line)) {
-      mode = "step";
-      return;
-    }
-    if (mode === "ing" || looksLikeIngredient(line)) {
-      mode = "ing";
-      ingredientLines.push(cleanBullet(line));
-      return;
-    }
-    if (mode === "step" || looksLikeStep(line)) {
-      mode = "step";
-      steps.push(convertFahrenheitTextToCelsius(cleanBullet(line)));
-    }
+async function saveRecipeToFirestore(recipe) {
+  const cfg = getSyncConfig();
+  if (!cfg.firebaseProjectId || !cfg.firebaseApiKey) throw new Error("Missing Firebase config");
+  const endpoint =
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(cfg.firebaseProjectId)}` +
+    `/databases/(default)/documents/recipes/${encodeURIComponent(recipe.id)}?key=${encodeURIComponent(cfg.firebaseApiKey)}`;
+  const doc = {
+    fields: {
+      id: { stringValue: recipe.id },
+      name: { stringValue: recipe.name },
+      category: { stringValue: recipe.category },
+      payload: { stringValue: JSON.stringify(recipe) },
+      updatedAt: { integerValue: String(Date.now()) },
+    },
+  };
+  const response = await fetch(endpoint, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(doc),
   });
-
-  const ingredients = ingredientLines.map(toIngredientData);
-  return {
-    id: `r_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    title,
-    category: category || "Meal",
-    ingredients,
-    steps: steps.length ? steps : ["Add instructions manually."],
-    sourceUrl: "",
-    reviews: [],
-    snapshots: [],
-    createdAt: Date.now(),
-    substitutions: collectSubstitutions(ingredients),
-  };
+  if (!response.ok) throw new Error("Firestore save failed");
 }
 
-function toIngredientData(line) {
-  const parsed = parseAmount(line);
-  const rest = line.replace(parsed.raw, "").trim();
-  const name = rest || line;
-  const isLiquid = /\b(milk|water|oil|juice|broth|cream)\b/i.test(name);
-  const gramsPerUnit = resolveGramsPerUnit(parsed.unit, name);
-  const grams = parsed.value * gramsPerUnit;
-  const ml = isLiquid ? parsed.value * resolveMlPerUnit(parsed.unit) : 0;
-  return {
-    name,
-    original: line,
-    grams: Math.max(1, round(grams)),
-    ml: Math.max(0, round(ml)),
-    isLiquid,
-  };
+async function fetchRecipeTextFromUrl(url) {
+  const attempts = [
+    async () => {
+      const res = await fetch(url, { mode: "cors" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return htmlToText(await res.text());
+    },
+    async () => {
+      const proxyUrl = `https://r.jina.ai/http://${url.replace(/^https?:\/\//i, "")}`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+      return await res.text();
+    },
+  ];
+  let lastError = "Unknown import error";
+  for (const fn of attempts) {
+    try {
+      const text = await fn();
+      if (text && text.trim().length > 20) return text;
+      lastError = "Imported content was empty";
+    } catch (err) {
+      lastError = err.message || String(err);
+    }
+  }
+  throw new Error(lastError);
+}
+
+function htmlToText(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return doc.body?.innerText || "";
+}
+
+function guessTitleFromText(text) {
+  return text
+    .split("\n")
+    .map((v) => v.trim())
+    .find((v) => v.length > 4 && v.length < 80);
 }
 
 function parseAmount(line) {
   const match = line.match(/^((?:\d+\s+)?\d+\/\d+|\d+(?:\.\d+)?)\s*([a-zA-Z]+)?/);
   if (!match) return { value: 1, unit: "unit", raw: "" };
-  return {
-    value: numberFromText(match[1]),
-    unit: (match[2] || "unit").toLowerCase(),
-    raw: match[0],
-  };
+  return { value: numberFromText(match[1]), unit: (match[2] || "unit").toLowerCase(), raw: match[0] };
+}
+
+function numberFromText(text) {
+  return text.split(/\s+/).reduce((sum, token) => {
+    if (token.includes("/")) {
+      const [a, b] = token.split("/").map(Number);
+      return sum + a / b;
+    }
+    return sum + Number(token);
+  }, 0);
 }
 
 function resolveGramsPerUnit(unit, ingredientName) {
-  const u = unit.toLowerCase();
+  const u = String(unit || "").toLowerCase();
   if (u.startsWith("cup")) {
     if (/\bflour\b/i.test(ingredientName)) return 120;
     if (/\bsugar\b/i.test(ingredientName)) return 200;
@@ -634,7 +730,7 @@ function resolveGramsPerUnit(unit, ingredientName) {
 }
 
 function resolveMlPerUnit(unit) {
-  const u = unit.toLowerCase();
+  const u = String(unit || "").toLowerCase();
   if (u.startsWith("cup")) return 240;
   if (u.startsWith("tbsp")) return 15;
   if (u.startsWith("tsp")) return 5;
@@ -644,45 +740,49 @@ function resolveMlPerUnit(unit) {
   return 0;
 }
 
-function collectSubstitutions(ingredients) {
-  const lines = [];
-  ingredients.forEach((item) => {
-    const key = Object.keys(substitutionMap).find((k) => item.name.toLowerCase().includes(k));
-    if (key) lines.push(`${item.name}: ${substitutionMap[key].join(", ")}`);
+function ingredientMeasureText(item, scale) {
+  const grams = round(item.grams * scale);
+  if (item.isLiquid) return `${grams} g / ${round(item.ml * scale)} ml`;
+  return `${grams} g`;
+}
+
+function injectIngredientAmountsIntoStep(step, ingredients, scale) {
+  let result = step;
+  const sorted = [...ingredients].sort((a, b) => b.name.length - a.name.length);
+  sorted.forEach((item) => {
+    const name = (item.name || "").trim();
+    if (!name || name.length < 2) return;
+    const pattern = new RegExp(`\\b${escapeRegExp(name)}\\b`, "i");
+    if (pattern.test(result)) result = result.replace(pattern, `${name} (${ingredientMeasureText(item, scale)})`);
   });
-  return lines;
+  return result;
 }
 
-function looksLikeIngredient(line) {
-  return /^[-*]?\s*(\d|one|two|three|four|five)\b/i.test(line);
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function looksLikeStep(line) {
-  return /\b(preheat|mix|whisk|stir|bake|cook|fold|simmer|chop|add|beat|serve|rest)\b/i.test(line);
+function convertFahrenheitTextToCelsius(line) {
+  return String(line || "")
+    .replace(/(\d+(?:\.\d+)?)\s*°?\s*F\b/gi, (m, f) => `${Math.round(((Number(f) - 32) * 5) / 9)}C`)
+    .replace(/(\d+(?:\.\d+)?)\s*degrees?\s*fahrenheit\b/gi, (m, f) => `${Math.round(((Number(f) - 32) * 5) / 9)}C`);
 }
 
-function cleanBullet(line) {
-  return line.replace(/^[-*]\s+/, "").replace(/^\d+[.)]\s+/, "").trim();
+function formatMin(value) {
+  const v = Number(value || 0);
+  if (!v) return "-";
+  if (v < 60) return `${v} min`;
+  const h = Math.floor(v / 60);
+  const m = v % 60;
+  return m ? `${h} hr ${m} min` : `${h} hr`;
 }
 
-function numberFromText(text) {
-  return text.split(/\s+/).reduce((sum, token) => {
-    if (token.includes("/")) {
-      const [a, b] = token.split("/").map(Number);
-      return sum + a / b;
-    }
-    return sum + Number(token);
-  }, 0);
+function strip(num) {
+  return Number(num.toFixed(2));
 }
 
-function htmlToText(html) {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return doc.body?.innerText || "";
-}
-
-function findTitleFromHtml(html) {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return doc.querySelector("title")?.textContent?.trim() || "";
+function round(value) {
+  return Math.round(value * 10) / 10;
 }
 
 function fileToDataUrl(file) {
@@ -695,314 +795,30 @@ function fileToDataUrl(file) {
   });
 }
 
-function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (char) => {
-    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char];
-  });
-}
-
-function escapeHtmlKeepButtons(raw) {
-  const token = "__BTN__";
-  const pieces = [];
-  const replaced = raw.replace(/<button[^>]*>.*?<\/button>/g, (btn) => {
-    pieces.push(btn);
-    return token;
-  });
-  let escaped = escapeHtml(replaced);
-  pieces.forEach((btn) => {
-    escaped = escaped.replace(token, btn);
-  });
-  return escaped;
-}
-
-function round(value) {
-  return Math.round(value * 10) / 10;
-}
-
-function ingredientMeasureText(item, scale) {
-  const grams = round(item.grams * scale);
-  if (item.isLiquid) {
-    const ml = round(item.ml * scale);
-    return `${grams} g / ${ml} ml`;
-  }
-  return `${grams} g`;
-}
-
-function injectIngredientAmountsIntoStep(step, ingredients, scale) {
-  let result = step;
-  const sorted = [...ingredients].sort((a, b) => b.name.length - a.name.length);
-  sorted.forEach((item) => {
-    const name = (item.name || "").trim();
-    if (!name || name.length < 2) return;
-    const pattern = new RegExp(`\\b${escapeRegExp(name)}\\b`, "i");
-    if (pattern.test(result)) {
-      result = result.replace(pattern, `${name} (${ingredientMeasureText(item, scale)})`);
-    }
-  });
-  return result;
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function convertFahrenheitTextToCelsius(line) {
-  return line
-    .replace(/(\d+(?:\.\d+)?)\s*°?\s*F\b/gi, (match, f) => `${Math.round(((Number(f) - 32) * 5) / 9)}C`)
-    .replace(/(\d+(?:\.\d+)?)\s*degrees?\s*fahrenheit\b/gi, (match, f) => `${Math.round(((Number(f) - 32) * 5) / 9)}C`);
-}
-
-function buildRecipeFromEditors({ title, category, ingredientsText, stepsText, sourceText }) {
-  const ingredientLines = ingredientsText
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const stepLines = stepsText
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map(convertFahrenheitTextToCelsius);
-  const ingredients = ingredientLines.map(toIngredientData);
-  return {
-    id: `r_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    title: title || "Untitled Recipe",
-    category: category || "Meal",
-    ingredients,
-    steps: stepLines.length ? stepLines : ["Add instructions manually."],
-    sourceUrl: "",
-    sourceText: sourceText || "",
-    reviews: [],
-    snapshots: [],
-    createdAt: Date.now(),
-    substitutions: collectSubstitutions(ingredients),
-  };
-}
-
-async function analyzeRecipeWithGemini(rawText) {
-  const backendResult = await tryAnalyzeViaBackend(rawText);
-  if (backendResult.ok) return backendResult.data;
-  throw new Error(`Backend analyzer error: ${backendResult.error || "Unknown backend error"}`);
-}
-
-async function tryAnalyzeViaBackend(rawText) {
-  try {
-    const response = await fetch("/api/analyze-recipe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipeText: rawText }),
-    });
-    if (!response.ok) {
-      let serverMessage = `HTTP ${response.status}`;
-      try {
-        const errJson = await response.json();
-        serverMessage = errJson?.error || serverMessage;
-      } catch {}
-      return { ok: false, error: serverMessage };
-    }
-    const parsed = await response.json();
-    if (!parsed || !Array.isArray(parsed.ingredients) || !Array.isArray(parsed.steps)) {
-      return { ok: false, error: "Invalid backend response shape" };
-    }
-    return {
-      ok: true,
-      data: {
-        title: String(parsed.title || "").trim(),
-        category: String(parsed.category || "Meal").trim(),
-        ingredients: parsed.ingredients.map((x) => String(x).trim()).filter(Boolean),
-        steps: parsed.steps.map((x) => String(x).trim()).filter(Boolean),
-      },
-    };
-  } catch (err) {
-    return { ok: false, error: err?.message || "Network error while calling backend analyzer" };
-  }
-}
-
-async function resolveAvailableGeminiModel(apiBase, apiKey, version) {
-  const preferred = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash"];
-  const listUrl = `${apiBase}/${version}/models?key=${apiKey}`;
-  const listResponse = await fetch(listUrl, { method: "GET" });
-  if (!listResponse.ok) {
-    const errText = await listResponse.text();
-    throw new Error(`ListModels ${version} failed: ${listResponse.status} ${errText}`);
-  }
-  const payload = await listResponse.json();
-  const models = Array.isArray(payload.models) ? payload.models : [];
-  const supported = models
-    .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
-    .map((m) => String(m.name || "").replace(/^models\//, ""))
-    .filter(Boolean);
-
-  for (const wanted of preferred) {
-    if (supported.includes(wanted)) return wanted;
-  }
-  if (supported.length) return supported[0];
-  throw new Error("No generateContent model is available for this API key/project.");
-}
-
-async function saveRecipeToFirestore(recipe) {
-  const cfg = getSyncConfig();
-  if (!cfg.firebaseProjectId || !cfg.firebaseApiKey) {
-    throw new Error("Missing Firebase project configuration");
-  }
-  const endpoint =
-    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(cfg.firebaseProjectId)}` +
-    `/databases/(default)/documents/recipes/${encodeURIComponent(recipe.id)}?key=${encodeURIComponent(cfg.firebaseApiKey)}`;
-
-  const doc = {
-    fields: {
-      id: { stringValue: recipe.id },
-      title: { stringValue: recipe.title },
-      category: { stringValue: recipe.category },
-      sourceUrl: { stringValue: recipe.sourceUrl || "" },
-      sourceText: { stringValue: recipe.sourceText || "" },
-      createdAt: { integerValue: String(recipe.createdAt) },
-      updatedAt: { integerValue: String(Date.now()) },
-      ingredientsJson: { stringValue: JSON.stringify(recipe.ingredients) },
-      stepsJson: { stringValue: JSON.stringify(recipe.steps) },
-      substitutionsJson: { stringValue: JSON.stringify(recipe.substitutions || []) },
-    },
-  };
-
-  const response = await fetch(endpoint, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(doc),
-  });
-  if (!response.ok) {
-    throw new Error("Firestore save failed");
-  }
-  return response.json();
-}
-
-function safeParseJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const block = text.match(/\{[\s\S]*\}/);
-    if (!block) return null;
-    try {
-      return JSON.parse(block[0]);
-    } catch {
-      return null;
-    }
-  }
-}
-
-async function fetchRecipeTextFromUrl(url) {
-  const attempts = [
-    async () => {
-      const res = await fetch(url, { mode: "cors" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const html = await res.text();
-      return htmlToText(html);
-    },
-    async () => {
-      const proxyUrl = `https://r.jina.ai/http://${url.replace(/^https?:\/\//i, "")}`;
-      const res = await fetch(proxyUrl);
-      if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-      return await res.text();
-    },
-  ];
-
-  let lastError = "Unknown import error";
-  for (const attempt of attempts) {
-    try {
-      const text = await attempt();
-      if (text && text.trim().length > 20) return text;
-      lastError = "Imported content was empty";
-    } catch (err) {
-      lastError = err.message || String(err);
-    }
-  }
-  throw new Error(lastError);
-}
-
-function guessTitleFromText(text) {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.length > 4 && line.length < 80);
-}
-
 function getSyncConfig() {
   const raw = window.RECIPE_SYNC || {};
   const runtime = readRuntimeConfig();
-  return { ...DEFAULT_SYNC_CONFIG, ...raw, ...runtime };
+  return {
+    enabled: false,
+    supabaseUrl: "",
+    anonKey: "",
+    table: "app_store",
+    rowId: "main",
+    firebaseProjectId: "",
+    firebaseApiKey: "",
+    ...raw,
+    ...runtime,
+  };
 }
 
 function readRuntimeConfig() {
   try {
     const raw = localStorage.getItem("recipe_runtime_config");
     if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return typeof parsed === "object" && parsed ? parsed : {};
+    return JSON.parse(raw);
   } catch {
     return {};
   }
-}
-
-function writeRuntimeConfig(value) {
-  localStorage.setItem("recipe_runtime_config", JSON.stringify(value || {}));
-}
-
-function isSyncEnabled() {
-  const cfg = getSyncConfig();
-  return Boolean(cfg.enabled && cfg.supabaseUrl && cfg.anonKey);
-}
-
-function syncHeaders() {
-  const cfg = getSyncConfig();
-  return {
-    apikey: cfg.anonKey,
-    Authorization: `Bearer ${cfg.anonKey}`,
-    "Content-Type": "application/json",
-  };
-}
-
-async function hydrateFromCloud() {
-  if (!isSyncEnabled()) return;
-  const cloudStore = await pullCloudStore();
-  if (cloudStore && Array.isArray(cloudStore.recipes)) {
-    localStorage.setItem(APP_KEY, JSON.stringify(cloudStore));
-  }
-}
-
-function queueCloudSave(store) {
-  if (!isSyncEnabled()) return;
-  pushCloudStore(store).catch(() => {});
-}
-
-async function pullCloudStore() {
-  const cfg = getSyncConfig();
-  const url = `${cfg.supabaseUrl}/rest/v1/${cfg.table}?id=eq.${encodeURIComponent(cfg.rowId)}&select=payload&limit=1`;
-  const response = await fetch(url, {
-    method: "GET",
-    headers: syncHeaders(),
-  });
-  if (!response.ok) return null;
-  const data = await response.json();
-  if (!Array.isArray(data) || !data[0] || !data[0].payload) return null;
-  return data[0].payload;
-}
-
-async function pushCloudStore(store) {
-  const cfg = getSyncConfig();
-  const url = `${cfg.supabaseUrl}/rest/v1/${cfg.table}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      ...syncHeaders(),
-      Prefer: "resolution=merge-duplicates",
-    },
-    body: JSON.stringify([
-      {
-        id: cfg.rowId,
-        payload: store,
-        updated_at: new Date().toISOString(),
-      },
-    ]),
-  });
-  return response.ok;
 }
 
 function setupSyncControls() {
@@ -1010,43 +826,15 @@ function setupSyncControls() {
   const pullBtn = document.querySelector("#pullCloudBtn");
   const pushBtn = document.querySelector("#pushCloudBtn");
   if (!statusNode || !pullBtn || !pushBtn) return;
+  statusNode.textContent = "Cloud sync disabled in template-first mode.";
+  pullBtn.disabled = true;
+  pushBtn.disabled = true;
+}
 
-  const setStatus = (msg) => {
-    statusNode.textContent = msg;
-  };
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[ch]));
+}
 
-  if (!isSyncEnabled()) {
-    setStatus("Cloud sync is disabled. Fill sync-config.js to connect Supabase.");
-    pullBtn.disabled = true;
-    pushBtn.disabled = true;
-    return;
-  }
-
-  setStatus("Cloud sync connected. Local changes are auto-pushed.");
-
-  pullBtn.addEventListener("click", async () => {
-    setStatus("Pulling data from cloud...");
-    try {
-      const cloud = await pullCloudStore();
-      if (!cloud) {
-        setStatus("No cloud data found yet.");
-        return;
-      }
-      localStorage.setItem(APP_KEY, JSON.stringify(cloud));
-      setStatus("Cloud data pulled successfully. Reloading...");
-      location.reload();
-    } catch {
-      setStatus("Cloud pull failed.");
-    }
-  });
-
-  pushBtn.addEventListener("click", async () => {
-    setStatus("Pushing local data to cloud...");
-    try {
-      await pushCloudStore(loadStore());
-      setStatus("Cloud push completed.");
-    } catch {
-      setStatus("Cloud push failed.");
-    }
-  });
+function escapeAttr(text) {
+  return escapeHtml(text);
 }

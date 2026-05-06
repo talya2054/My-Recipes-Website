@@ -19,60 +19,99 @@
     <main class="container">
       <section class="panel">
         <div class="section-head">
-          <h1>Add Recipe</h1>
+          <h1>Add Recipe Template</h1>
         </div>
         <div class="add-grid">
           <div>
-            <label for="recipeUrl">Recipe URL</label>
+            <label for="recipeTitle">Recipe Name</label>
+            <input id="recipeTitle" type="text" placeholder="Apple Pie" />
+          </div>
+          <div>
+            <label for="recipeCategory">Category</label>
+            <select id="recipeCategory"></select>
+          </div>
+          <div>
+            <label for="recipeImage">Image URL</label>
+            <input id="recipeImage" type="url" placeholder="https://..." />
+          </div>
+          <div>
+            <label for="recipeMode">Cooking / Baking Mode</label>
+            <select id="recipeMode">
+              <option value="Cooking">Cooking</option>
+              <option value="Baking">Baking</option>
+            </select>
+          </div>
+          <div>
+            <label for="prepTime">Prep Time (min)</label>
+            <input id="prepTime" type="number" min="0" placeholder="45" />
+          </div>
+          <div>
+            <label for="totalTime">Total Time (min)</label>
+            <input id="totalTime" type="number" min="0" placeholder="105" />
+          </div>
+          <div>
+            <label for="servingsBase">Servings</label>
+            <input id="servingsBase" type="number" min="1" value="8" />
+          </div>
+          <div>
+            <label for="recipeSourceTitle">Recipe Source Title</label>
+            <input id="recipeSourceTitle" type="text" placeholder="Preppy Kitchen" />
+          </div>
+          <div class="full">
+            <label for="recipeUrl">Recipe Source URL</label>
             <div class="inline-field">
               <input id="recipeUrl" type="url" placeholder="https://example.com/recipe" />
-              <button id="fetchUrlBtn" class="btn btn-secondary" type="button">Fetch</button>
+              <button id="fetchUrlBtn" class="btn btn-secondary" type="button">Import Text</button>
             </div>
             <p class="hint">
-              URL import works on some pages with readable structured data. If blocked, paste text below.
+              URL import may fail on some websites. If blocked, paste text manually below and click Parse.
             </p>
           </div>
           <div class="full">
-            <label for="recipeSource">Input Zone: paste original recipe text</label>
+            <label for="recipeSource">Input Zone (raw text)</label>
             <textarea
               id="recipeSource"
-              rows="13"
+              rows="9"
               placeholder="Paste recipe text from WhatsApp, notes, or websites..."
             ></textarea>
           </div>
           <div class="full actions">
-            <button id="analyzeBtn" class="btn btn-primary" type="button">Analyze Recipe with AI</button>
-            <button id="previewBtn" class="btn btn-secondary" type="button">Fallback Parse</button>
+            <button id="previewBtn" class="btn btn-secondary" type="button">Parse Text</button>
           </div>
         </div>
       </section>
 
       <section class="panel">
         <div class="section-head">
-          <h2>Preview and Edit</h2>
+          <h2>Recipe Body</h2>
         </div>
         <div class="add-grid">
-          <div>
-            <label for="recipeTitle">Recipe Name</label>
-            <input id="recipeTitle" type="text" placeholder="Recipe name" />
-          </div>
-          <div>
-            <label for="recipeCategory">Category</label>
-            <select id="recipeCategory"></select>
+          <div class="full">
+            <label for="ingredientsEditor">Ingredients groups (format: [Group Name] then items)</label>
+            <textarea id="ingredientsEditor" rows="9" placeholder="[Dough]
+500 g Flour
+250 ml Milk
+[Filling]
+6 Apples"></textarea>
           </div>
           <div class="full">
-            <label for="ingredientsEditor">Ingredients (one per line)</label>
-            <textarea id="ingredientsEditor" rows="8" placeholder="1 cup flour"></textarea>
+            <label for="stepsEditor">Instructions groups (format: [Group Name] then numbered steps)</label>
+            <textarea id="stepsEditor" rows="10" placeholder="Preheat oven to 180C.
+[Dough]
+1 Mix flour and milk.
+2 Chill for (timer: 20 min).
+[Filling]
+1 Slice apples."></textarea>
           </div>
           <div class="full">
-            <label for="stepsEditor">Instructions (one step per line)</label>
-            <textarea id="stepsEditor" rows="8" placeholder="Preheat oven..."></textarea>
+            <label for="notesEditor">Notes (one per line)</label>
+            <textarea id="notesEditor" rows="5" placeholder="Store in an air tight container."></textarea>
           </div>
           <div class="full actions">
             <button id="saveBtn" class="btn btn-primary" type="button">Save to Cloud</button>
           </div>
         </div>
-        <div id="saveStatus" class="preview-box">Recipe preview will appear here after AI analysis.</div>
+        <div id="saveStatus" class="preview-box">Template ready. Fill fields and save.</div>
       </section>
     </main>
 
